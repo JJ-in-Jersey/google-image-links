@@ -5,6 +5,8 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 import google.auth.transport.requests
+from googleapiclient.http import MediaFileUpload
+
 from string import Template
 from datetime import datetime as dt
 import pandas as pd
@@ -12,12 +14,12 @@ from pathlib import Path
 
 from tt_file_tools.file_tools import write_df, print_file_exists
 
-DOWNLOADS = '/users/jason/downloads'
+BASE_PATH = '/users/jason/fair currents'
 SCOPES = ['https://www.googleapis.com/auth/drive']  # Full Drive access
 CLIENT_SECRETS_FILE_NAME = 'client_secret_395566799327-1r0m8lib5rv96vucqogeq7bkkcmls0a2.apps.googleusercontent.com.json'
-CLIENT_SECRETS_FILE_PATH = os.path.join(DOWNLOADS, CLIENT_SECRETS_FILE_NAME)
+CLIENT_SECRETS_FILE_PATH = os.path.join(BASE_PATH, CLIENT_SECRETS_FILE_NAME)
 REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob'
-TOKEN_FILE = os.path.join(DOWNLOADS, 'token.json')   # Path to store the token
+TOKEN_FILE = os.path.join(BASE_PATH, 'token.json')   # Path to store the token
 LOCATION_CODE_DICT = {
     'CCC': '13i6LgPzykPMAx6sBgTVqP5vUNKP5MGRT', 'CDC': '1Qkr3hMgqhOVFgPiPz0c13_BNJsKoEN2l', 'ER': '1rQQN5qz8znQ7g5I_phHj2hMhuhfgXCu7',
     'FIS': '19kntkElXjxBIAu79PsY-g97xU16RmUT0', 'NVS': '1Y_HFIgi1VMTAt3rcfEMbOHzTh9nOuXGo', 'PPC': '1CAYWhapAXKyeDn4K_oFQ-Qmo4JXOQSve',
@@ -119,7 +121,18 @@ def get_file_info(creds, root_folder_id):
         return None
 
 
-# Press the green button in the gutter to run the script.
+def upload_file(creds, filepath: Path):
+
+    try:
+        service = build('drive', 'v3', credentials=creds)
+        file_metadata = {'name': filepath.stem + filepath.suffix}
+        media = MediaFileUpload(filepath, mimetype='text/csv')
+        result = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        return result.get("id")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
 if __name__ == '__main__':
     credentials = load_credentials()
     if not credentials:
@@ -141,12 +154,67 @@ if __name__ == '__main__':
                 frame = frame.transpose()
                 frame = frame.drop(index=frame.index[0], axis=0).reset_index(drop=True)
                 frame.insert(0, 'code', loc_key)
-                frame.insert(0, 'speed', speed_key)
+                frame.insert(0, 'speed', int(speed_key))
                 output_frame = pd.concat([output_frame, frame], axis=0)
                 print(f'{speed_key} {loc_key}')
                 del frame
         output_frame.columns = ['speed', 'code'] + [i+1 for i in range(len(output_frame.columns) - 2)]
         output_frame = output_frame.sort_values(by=['code', 'speed']).reset_index(drop=True)
-        print_file_exists(write_df(output_frame, Path('/users/jason/fair currents/google_urls.csv')))
+        print_file_exists(write_df(output_frame, Path(BASE_PATH).joinpath('google_urls.csv')))
+        file_id = upload_file(credentials, Path(BASE_PATH).joinpath('google_urls.csv'))
     else:
         print("Authentication failed. Cannot access Google Drive.")
+
+
+# from googleapiclient.discovery import build
+# from googleapiclient.http import MediaFileUpload
+# from google.oauth2 import service_account
+#
+# # Replace with the path to your service account key file
+# SERVICE_ACCOUNT_FILE = 'path/to/your/service_account_key.json'
+#
+# # Replace with the desired scopes
+# SCOPES = ['https://www.googleapis.com/auth/drive.file']
+#
+# creds = service_account.Credentials.from_service_account_file(
+#     SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+#
+# try:
+#     service = build('drive', 'v3', credentials=creds)
+#
+#     # File to upload
+#     file_metadata = {'name': 'MyFile.txt'} # Replace with your desired file name
+#     media = MediaFileUpload('path/to/your/local/file.txt', # Replace with the path to your local file
+#                             mimetype='text/plain') # Replace with the correct mimetype
+#     file = service.files().create(body=file_metadata,
+#                                     media_body=media,
+#                                     fields='id').execute()
+#     print(F'File ID: {file.get("id")}')
+#
+# except Exception as e:
+#     print(f"An error occurred: {e}")
+#
+#
+# # Example for uploading a PDF
+# try:
+#     service = build('drive', 'v3', credentials=creds)
+#     file_metadata = {'name': 'MyDocument.pdf'}
+#     media = MediaFileUpload('path/to/your/local/document.pdf', mimetype='application/pdf')
+#     file = service.files().create(body=file_metadata,
+#                                     media_body=media,
+#                                     fields='id').execute()
+#     print(F'File ID: {file.get("id")}')
+# except Exception as e:
+#     print(f"An error occurred: {e}")
+#
+# # Example for uploading an Image (PNG)
+# try:
+#     service = build('drive', 'v3', credentials=creds)
+#     file_metadata = {'name': 'MyImage.png'}
+#     media = MediaFileUpload('path/to/your/local/image.png', mimetype='image/png')
+#     file = service.files().create(body=file_metadata,
+#                                     media_body=media,
+#                                     fields='id').execute()
+#     print(F'File ID: {file.get("id")}')
+# except Exception as e:
+#     print(f"An error occurred: {e}")
