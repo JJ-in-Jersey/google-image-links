@@ -178,7 +178,7 @@ def find_files(f_name: str, f_dict: dict):
 def delete_file(svc, fid):
     try:
         svc.files().delete(fileId=fid).execute()
-        print('fid has been successfully deleted.')
+        print(f'{fid} has been successfully deleted.')
     except Exception as e:
         print(f"An error occurred: {e}")
 
