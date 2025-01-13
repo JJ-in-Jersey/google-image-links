@@ -11,6 +11,7 @@ from datetime import datetime as dt
 import pandas as pd
 from pathlib import Path
 
+from sympy import false
 from tt_file_tools.file_tools import write_df, print_file_exists
 
 BASE_PATH = '/users/jason/fair currents'
@@ -182,6 +183,17 @@ def delete_file(svc, fid):
     except Exception as e:
         print(f"An error occurred: {e}")
 
+def file_integrity(loc_code: str, g_dict: dict):
+    directions = ['+', '-']
+    field_names = ['location', 'direction', 'speed', 'year', 'month', 'day', 'ext']
+    file_fields = {field_names[i]: f for i, f in enumerate(g_dict['name'].split())}
+    file_date = dt(year=int(file_fields['year']), month=int(file_fields['month']), day=int(file_fields['day']))
+
+    if (len(file_fields) == len(field_names) and file_fields['location'].upper() == loc_code.upper()
+            and file_fields['direction'] in directions and g_dict['mimeType'] == 'image/png'):
+        return file_date
+    else:
+        raise ValueError(g_dict['name'])
 
 if __name__ == '__main__':
     credentials = load_credentials()
@@ -209,8 +221,7 @@ if __name__ == '__main__':
                 print(f'        {code} {speed_folder['name']} {len(files)}')
                 frame = pd.DataFrame(columns=['date', 'id'])
                 for file in files:
-                    fields = file['name'].split()
-                    date = dt(year=int('20' + fields[3]), month=int(fields[4]), day=int(fields[5])).date()
+                    date = file_integrity(code, file)
                     frame.loc[len(frame)] = [date, FILE_URL_TEMPLATE.substitute(fid=file['id'])]
                 frame.sort_values(by=['date'], inplace=True)
                 frame = frame.transpose()
