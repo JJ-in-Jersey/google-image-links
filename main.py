@@ -11,7 +11,6 @@ from datetime import datetime as dt
 import pandas as pd
 from pathlib import Path
 
-from sympy import false
 from tt_file_tools.file_tools import write_df, print_file_exists
 
 BASE_PATH = '/users/jason/fair currents'
@@ -93,12 +92,10 @@ def get_file_info(svc, root_folder_id):
         page_token = None
         while True:
             results = svc.files().list(
-                pageSize=1000,  # Increase page size for efficiency
-                fields="nextPageToken, files(id, name, mimeType)",  # Include mimeType
-                pageToken=page_token,
-                q=f"'{root_folder_id}' in parents"
+                pageSize=1000, fields="nextPageToken, files(id, name, mimeType)",
+                pageToken=page_token, q=f"'{root_folder_id}' in parents and trashed = false"
             ).execute()
-            items += results.get('files', [])
+            items += sorted(results.get('files', []), key=lambda itm: itm['name'])
             page_token = results.get('nextPageToken')
             if not page_token:
                 break
@@ -127,53 +124,65 @@ def upload_file(svc, filepath: Path):
         print(f"An error occurred: {e}")
 
 
-def list_folders(svc, parent_id='root', folder_list=None):
-    if folder_list is None:
-        print('Building folder list')
-        folder_list = []
+def add_parent_info(child_item: dict, parent_item: dict = None):
+    # child_item['parent_name'] = parent_item['name'] if parent_item else None
+    # child_item['parent_id'] = parent_item['id'] if parent_item else None
+    child_item['parent_item'] = parent_item
+
+
+def get_tree(item: dict):
+    list = [item['name']]
+    while item['parent_item']:
+        list.append(item['parent_item']['name'])
+        item = item['parent_item']
+    list.reverse()
+    return ' > '.join(map(str, list))
+
+
+def folder_lookup(svc, folder_item: dict = None):
+    folder_id = folder_item['id'] if folder_item else IMAGE_FOLDER_CODE
     try:
-        query = f"mimeType = 'application/vnd.google-apps.folder' and trashed = false and '{parent_id}' in parents"
-        results = svc.files().list(q=query, spaces='drive', fields='nextPageToken, files(id, name)').execute()
-        items = results.get('files', [])
-        for item in items:
-            folder_list.append({'id': item['id'], 'name': item['name'], 'parent': parent_id})
-            list_folders(svc, item['id'], folder_list)  # Recursive call
-        return folder_list
+        results_dict = {}
+        while True:
+            query = f"mimeType='application/vnd.google-apps.folder' and '{folder_id}' in parents and trashed=false"
+            results = svc.files().list(q=query, spaces='drive', fields='nextPageToken, files(id, name)').execute()
+            items = results.get('files', [])
+            if len(items):
+                items = sorted(items, key=lambda itm: itm['name'])
+                for item in items:
+                    add_parent_info(item, folder_item)
+                results_dict.update({item['id']: item for item in items})
+            page_token = results.get('nextPageToken')
+            if not page_token:
+                break
+        return results_dict
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
 
 
-def list_files(svc, folder_list):
-    print('Building file dictionary')
-    file_list = []
+def file_lookup(svc, folder_item: dict = None):
+    folder_id = folder_item['id'] if folder_item else 'root'
     try:
-        for folder_id in ['root'] + [f['id'] for f in folder_list]:
-            items = []
-            page_token = None
-            while True:
-                results = svc.files().list(
-                    pageSize=1000,  # Increase page size for efficiency
-                    fields="nextPageToken, files(id, name, mimeType)",  # Include mimeType
-                    pageToken=page_token,
-                    q=f"'{folder_id}' in parents and trashed = false"
-                ).execute()
-                items += results.get('files', [])
-                page_token = results.get('nextPageToken')
-                if not page_token:
-                    break
-            file_list += items
-
-        name_dict = {f['name']: f for f in file_list}
-        return name_dict
-
+        results_dict = {}
+        page_token = None
+        while True:
+            query = f"mimeType != 'application/vnd.google-apps.folder' and '{folder_id}' in parents and trashed = false"
+            fields = "nextPageToken, files(id, name, mimeType)"
+            results = svc.files().list(pageSize=1000, fields=fields, pageToken=page_token, q=query).execute()
+            items = results.get('files', [])
+            items = sorted(items, key=lambda itm: itm['name'])
+            if len(items):
+                for item in items:
+                    add_parent_info(item, folder_item)
+                results_dict.update({item['id']: item for item in items})
+            page_token = results.get('nextPageToken')
+            if not page_token:
+                break
+        return results_dict
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
-
-
-def find_files(f_name: str, f_dict: dict):
-    return [f_dict[key] for key in f_dict.keys() if f_name in key]
 
 
 def delete_file(svc, fid):
@@ -182,6 +191,7 @@ def delete_file(svc, fid):
         print(f'{fid} has been successfully deleted.')
     except Exception as e:
         print(f"An error occurred: {e}")
+
 
 def file_integrity(loc_code: str, g_dict: dict):
     directions = ['+', '-']
@@ -195,6 +205,7 @@ def file_integrity(loc_code: str, g_dict: dict):
     else:
         raise ValueError(g_dict['name'])
 
+
 if __name__ == '__main__':
     credentials = load_credentials()
     if not credentials:
@@ -202,13 +213,18 @@ if __name__ == '__main__':
 
     if credentials:
         service = build('drive', 'v3', credentials=credentials)
-        f_list = list_folders(service)
-        file_dict = list_files(service, f_list)
-        values = find_files(GOOGLE_NAME, file_dict)
-        if len(values):
-            for v in values:
-                print(f'{v['name']} found.')
-                delete_file(service, v['id'])
+
+        # folders = folder_lookup(service)
+        # new_folders = dict(folders)
+        # while len(new_folders):
+        #     collected_folders = {}
+        #     for v in new_folders.values():
+        #         print(f'Processing {get_tree(v)}')
+        #         v['folders'] = folder_lookup(service, v)
+        #         v['files'] = file_lookup(service, v)
+        #         collected_folders.update(v['folders'])
+        #         folders.update(collected_folders)
+        #     new_folders = dict(collected_folders)
 
         output_frame = pd.DataFrame()
         location_folders = [f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder']
