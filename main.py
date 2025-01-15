@@ -85,6 +85,33 @@ def load_credentials():
     return None
 
 
+def find_file(svc, filename: str):
+    try:
+        page_token = None
+        count = 0
+        while True:
+            results = svc.files().list(pageSize=1000, fields="nextPageToken, files(id, name)",
+                                       pageToken=page_token, q="mimeType != 'application/vnd.google-apps.folder' and trashed = false").execute()
+            items = results.get('files', [])
+            count += len(items)
+            print(f'Searching for "{filename}": {count}')
+            item = next((i for i in items if i["name"] == filename), None)
+            if item:
+                return item
+            page_token = results.get('nextPageToken')
+            if not page_token:
+                break
+
+        return None
+
+    except Exception as e:
+        print(f"An error occurred: {type(e).__name__}: {e}")
+        if hasattr(e, 'details'):
+            print(f"Details: {e.details}")
+        return None
+
+
+
 def get_file_info(svc, root_folder_id):
     # Uses the Drive API to list ALL files and folders with pagination.
     try:
@@ -214,17 +241,12 @@ if __name__ == '__main__':
     if credentials:
         service = build('drive', 'v3', credentials=credentials)
 
-        # folders = folder_lookup(service)
-        # new_folders = dict(folders)
-        # while len(new_folders):
-        #     collected_folders = {}
-        #     for v in new_folders.values():
-        #         print(f'Processing {get_tree(v)}')
-        #         v['folders'] = folder_lookup(service, v)
-        #         v['files'] = file_lookup(service, v)
-        #         collected_folders.update(v['folders'])
-        #         folders.update(collected_folders)
-        #     new_folders = dict(collected_folders)
+        old_file_name = 'google_urls.csv'
+        old_file = find_file(service, old_file_name)
+        if old_file:
+            delete_file(service, old_file['id'])
+        else:
+            print(f'File "{old_file_name}" not found.')
 
         output_frame = pd.DataFrame()
         location_folders = [f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder']
@@ -248,6 +270,7 @@ if __name__ == '__main__':
                 del frame
         output_frame.columns = ['speed', 'code'] + [i+1 for i in range(len(output_frame.columns) - 2)]
         output_frame = output_frame.sort_values(by=['code', 'speed']).reset_index(drop=True)
+
         print_file_exists(write_df(output_frame, Path(BASE_PATH).joinpath(GOOGLE_NAME)))
         file_id = upload_file(service, Path(BASE_PATH).joinpath(GOOGLE_NAME))
     else:
