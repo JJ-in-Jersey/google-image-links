@@ -234,7 +234,7 @@ def file_integrity(loc_code: str, g_dict: dict):
         print(f"An error occurred: {g_dict['name']}")
         raise ValueError(g_dict['name'])
 
-    return file_date
+    return file_date.date()
 
 
 if __name__ == '__main__':
@@ -252,7 +252,8 @@ if __name__ == '__main__':
         else:
             print(f'"{old_file_name}" not found.')
 
-        output_frame = pd.DataFrame()
+        column_names = None
+        output_frame = None
         location_folder_items = sorted([f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder'], key=lambda x: x['name'].upper())
         for location_folder_item in location_folder_items:
             code = location_folder_item['name'].upper()
@@ -264,16 +265,19 @@ if __name__ == '__main__':
             for items in [pos_speed_folder_items] + [neg_speed_folder_items]:
                 for speed_folder_item in items:
                     files = get_file_info(service, speed_folder_item['id'])
+                    dates = [str(file_integrity(code, f)).lstrip('0') for f in files]
+                    urls = [FILE_URL_TEMPLATE.substitute(fid=f['id']) for f in files]
                     print(f'        {code} {speed_folder_item['name']} {len(files)}')
-                    frame = pd.DataFrame(columns=['date', 'id'])
-                    for file in files:
-                        date = file_integrity(code, file)
-                        frame.loc[len(frame)] = [date, FILE_URL_TEMPLATE.substitute(fid=file['id'])]
+                    if output_frame is None:
+                        column_names = ['speed', 'code'] + dates
+                        output_frame = pd.DataFrame(columns=column_names)
+                    frame = pd.DataFrame({'date': dates, 'url': urls})
                     frame.sort_values(by=['date'], inplace=True)
                     frame = frame.transpose()
                     frame = frame.drop(index=frame.index[0], axis=0).reset_index(drop=True)
                     frame.insert(0, 'code', code)
                     frame.insert(0, 'speed', int(speed_folder_item['name']))
+                    frame.columns = column_names
                     output_frame = pd.concat([output_frame, frame], axis=0)
                     del frame
 
