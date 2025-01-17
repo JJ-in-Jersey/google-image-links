@@ -223,14 +223,18 @@ def delete_file(svc, fid):
 def file_integrity(loc_code: str, g_dict: dict):
     directions = ['+', '-']
     field_names = ['location', 'direction', 'speed', 'year', 'month', 'day', 'ext']
-    file_fields = {field_names[i]: f for i, f in enumerate(g_dict['name'].split())}
-    file_date = dt(year=int(file_fields['year']), month=int(file_fields['month']), day=int(file_fields['day']))
-
-    if (len(file_fields) == len(field_names) and file_fields['location'].upper() == loc_code.upper()
-            and file_fields['direction'] in directions and g_dict['mimeType'] == 'image/png'):
-        return file_date
-    else:
+    try:
+        file_fields = {field_names[i]: f for i, f in enumerate(g_dict['name'].split())}
+        if (len(file_fields) == len(field_names) and file_fields['location'].upper() == loc_code.upper()
+                and file_fields['direction'] in directions and g_dict['mimeType'] == 'image/png'):
+            file_date = dt(year=int(file_fields['year']), month=int(file_fields['month']), day=int(file_fields['day']))
+        else:
+            raise ValueError(g_dict['name'])
+    except Exception:
+        print(f"An error occurred: {g_dict['name']}")
         raise ValueError(g_dict['name'])
+
+    return file_date
 
 
 if __name__ == '__main__':
@@ -246,28 +250,33 @@ if __name__ == '__main__':
         if old_file:
             delete_file(service, old_file['id'])
         else:
-            print(f'File "{old_file_name}" not found.')
+            print(f'"{old_file_name}" not found.')
 
         output_frame = pd.DataFrame()
-        location_folders = [f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder']
-        for loc_folder in location_folders:
-            code = loc_folder['name'].upper()
+        location_folder_items = sorted([f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder'], key=lambda x: x['name'].upper())
+        for location_folder_item in location_folder_items:
+            code = location_folder_item['name'].upper()
             print(f'{code}')
-            speed_folders = [f for f in get_file_info(service, loc_folder['id']) if f['mimeType'] == 'application/vnd.google-apps.folder']
-            for speed_folder in speed_folders:
-                files = get_file_info(service, speed_folder['id'])
-                print(f'        {code} {speed_folder['name']} {len(files)}')
-                frame = pd.DataFrame(columns=['date', 'id'])
-                for file in files:
-                    date = file_integrity(code, file)
-                    frame.loc[len(frame)] = [date, FILE_URL_TEMPLATE.substitute(fid=file['id'])]
-                frame.sort_values(by=['date'], inplace=True)
-                frame = frame.transpose()
-                frame = frame.drop(index=frame.index[0], axis=0).reset_index(drop=True)
-                frame.insert(0, 'code', code)
-                frame.insert(0, 'speed', int(speed_folder['name']))
-                output_frame = pd.concat([output_frame, frame], axis=0)
-                del frame
+            speed_folder_items = [f for f in get_file_info(service, location_folder_item['id']) if f['mimeType'] == 'application/vnd.google-apps.folder']
+            pos_speed_folder_items = sorted([f for f in speed_folder_items if int(f['name']) > 0], key=lambda x: int(x['name']))
+            neg_speed_folder_items = sorted([f for f in speed_folder_items if int(f['name']) < 0], key=lambda x: int(x['name']), reverse=True)
+
+            for items in [pos_speed_folder_items] + [neg_speed_folder_items]:
+                for speed_folder_item in items:
+                    files = get_file_info(service, speed_folder_item['id'])
+                    print(f'        {code} {speed_folder_item['name']} {len(files)}')
+                    frame = pd.DataFrame(columns=['date', 'id'])
+                    for file in files:
+                        date = file_integrity(code, file)
+                        frame.loc[len(frame)] = [date, FILE_URL_TEMPLATE.substitute(fid=file['id'])]
+                    frame.sort_values(by=['date'], inplace=True)
+                    frame = frame.transpose()
+                    frame = frame.drop(index=frame.index[0], axis=0).reset_index(drop=True)
+                    frame.insert(0, 'code', code)
+                    frame.insert(0, 'speed', int(speed_folder_item['name']))
+                    output_frame = pd.concat([output_frame, frame], axis=0)
+                    del frame
+
         output_frame.columns = ['speed', 'code'] + [i+1 for i in range(len(output_frame.columns) - 2)]
         output_frame = output_frame.sort_values(by=['code', 'speed']).reset_index(drop=True)
 
