@@ -277,9 +277,6 @@ if __name__ == '__main__':
                     output_frame = pd.concat([output_frame, frame], axis=0)
                     del frame
 
-        output_frame.columns = ['speed', 'code'] + [i+1 for i in range(len(output_frame.columns) - 2)]
-        output_frame = output_frame.sort_values(by=['code', 'speed']).reset_index(drop=True)
-
         print_file_exists(write_df(output_frame, Path(BASE_PATH).joinpath(GOOGLE_NAME)))
         file_id = upload_file(service, Path(BASE_PATH).joinpath(GOOGLE_NAME))
     else:
