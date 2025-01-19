@@ -220,14 +220,14 @@ def delete_file(svc, fid):
         print(f"An error occurred: {e}")
 
 
-def file_integrity(loc_code: str, g_dict: dict):
+def file_name_integrity(loc_code: str, g_dict: dict):
     directions = ['+', '-']
     field_names = ['location', 'direction', 'speed', 'year', 'month', 'day', 'ext']
     try:
         file_fields = {field_names[i]: f for i, f in enumerate(g_dict['name'].split())}
         if (len(file_fields) == len(field_names) and file_fields['location'].upper() == loc_code.upper()
                 and file_fields['direction'] in directions and g_dict['mimeType'] == 'image/png'):
-            file_date = dt(year=int(file_fields['year']), month=int(file_fields['month']), day=int(file_fields['day']))
+            file_date = dt(year=int(file_fields['year']) + 2000, month=int(file_fields['month']), day=int(file_fields['day']))
         else:
             raise ValueError(g_dict['name'])
     except Exception:
@@ -268,11 +268,13 @@ if __name__ == '__main__':
                 for speed_folder_item in items:
                     speed_name = speed_folder_item['name']
                     files = get_file_info(service, speed_folder_item['id'])
-                    dates = [str(file_integrity(code, f)).lstrip('0') for f in files]
+                    dates = [file_name_integrity(code, f) for f in files]
                     urls = [FILE_URL_TEMPLATE.substitute(fid=f['id']) for f in files]
                     print(f'        {code} {speed_name} {len(files)}')
                     speed_frame = pd.DataFrame({'date': dates, 'speed': int(speed_name), code: urls})
+                    speed_frame.date = pd.to_datetime(speed_frame.date)
                     speed_frame.sort_values(by=['date'], inplace=True)
+                    speed_frame.date = speed_frame.date.dt.strftime("%-m/%-d/%Y")
                     location_frame = pd.concat([location_frame, speed_frame])
             output_frame['date'] = location_frame['date']
             output_frame['speed'] = location_frame['speed']
