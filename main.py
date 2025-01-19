@@ -274,7 +274,7 @@ if __name__ == '__main__':
                     speed_frame = pd.DataFrame({'date': dates, 'speed': int(speed_name), code: urls})
                     speed_frame.date = pd.to_datetime(speed_frame.date)
                     speed_frame.sort_values(by=['date'], inplace=True)
-                    speed_frame.date = speed_frame.date.dt.strftime("%-m/%-d/%Y")
+                    speed_frame.date = speed_frame.date.dt.strftime("%-m/%-d/%Y")  # glide format
                     location_frame = pd.concat([location_frame, speed_frame])
             output_frame['date'] = location_frame['date']
             output_frame['speed'] = location_frame['speed']
