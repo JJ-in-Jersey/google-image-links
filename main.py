@@ -238,6 +238,7 @@ def file_integrity(loc_code: str, g_dict: dict):
 
 
 if __name__ == '__main__':
+
     credentials = load_credentials()
     if not credentials:
         credentials = authenticate_user()
@@ -245,41 +246,37 @@ if __name__ == '__main__':
     if credentials:
         service = build('drive', 'v3', credentials=credentials)
 
-        old_file_name = 'google_urls.csv'
-        old_file = find_file(service, old_file_name)
-        if old_file:
-            delete_file(service, old_file['id'])
-        else:
-            print(f'"{old_file_name}" not found.')
+        if os.getenv("PYCHARM_HOSTED") != '1':
+            old_file_name = 'google_urls.csv'
+            old_file = find_file(service, old_file_name)
+            if old_file:
+                delete_file(service, old_file['id'])
+            else:
+                print(f'"{old_file_name}" not found.')
 
-        column_names = None
-        output_frame = None
         location_folder_items = sorted([f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder'], key=lambda x: x['name'].upper())
+        output_frame = pd.DataFrame(columns=['date', 'speed'] + [item['name'].upper() for item in location_folder_items])
         for location_folder_item in location_folder_items:
             code = location_folder_item['name'].upper()
             print(f'{code}')
             speed_folder_items = [f for f in get_file_info(service, location_folder_item['id']) if f['mimeType'] == 'application/vnd.google-apps.folder']
             pos_speed_folder_items = sorted([f for f in speed_folder_items if int(f['name']) > 0], key=lambda x: int(x['name']))
             neg_speed_folder_items = sorted([f for f in speed_folder_items if int(f['name']) < 0], key=lambda x: int(x['name']), reverse=True)
+            location_frame = pd.DataFrame(columns=['date', 'speed', code])
 
             for items in [pos_speed_folder_items] + [neg_speed_folder_items]:
                 for speed_folder_item in items:
+                    speed_name = speed_folder_item['name']
                     files = get_file_info(service, speed_folder_item['id'])
                     dates = [str(file_integrity(code, f)).lstrip('0') for f in files]
                     urls = [FILE_URL_TEMPLATE.substitute(fid=f['id']) for f in files]
-                    print(f'        {code} {speed_folder_item['name']} {len(files)}')
-                    if output_frame is None:
-                        column_names = ['speed', 'code'] + dates
-                        output_frame = pd.DataFrame(columns=column_names)
-                    frame = pd.DataFrame({'date': dates, 'url': urls})
-                    frame.sort_values(by=['date'], inplace=True)
-                    frame = frame.transpose()
-                    frame = frame.drop(index=frame.index[0], axis=0).reset_index(drop=True)
-                    frame.insert(0, 'code', code)
-                    frame.insert(0, 'speed', int(speed_folder_item['name']))
-                    frame.columns = column_names
-                    output_frame = pd.concat([output_frame, frame], axis=0)
-                    del frame
+                    print(f'        {code} {speed_name} {len(files)}')
+                    speed_frame = pd.DataFrame({'date': dates, 'speed': int(speed_name), code: urls})
+                    speed_frame.sort_values(by=['date'], inplace=True)
+                    location_frame = pd.concat([location_frame, speed_frame])
+            output_frame['date'] = location_frame['date']
+            output_frame['speed'] = location_frame['speed']
+            output_frame[code] = location_frame[code]
 
         print_file_exists(write_df(output_frame, Path(BASE_PATH).joinpath(GOOGLE_NAME)))
         file_id = upload_file(service, Path(BASE_PATH).joinpath(GOOGLE_NAME))
