@@ -255,14 +255,14 @@ if __name__ == '__main__':
                 print(f'"{old_file_name}" not found.')
 
         location_folder_items = sorted([f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder'], key=lambda x: x['name'].upper())
-        output_frame = pd.DataFrame(columns=['date', 'speed'] + [item['name'].upper() for item in location_folder_items])
+        output_frame = pd.DataFrame()
         for location_folder_item in location_folder_items:
             code = location_folder_item['name'].upper()
             print(f'{code}')
             speed_folder_items = [f for f in get_file_info(service, location_folder_item['id']) if f['mimeType'] == 'application/vnd.google-apps.folder']
             pos_speed_folder_items = sorted([f for f in speed_folder_items if int(f['name']) > 0], key=lambda x: int(x['name']))
             neg_speed_folder_items = sorted([f for f in speed_folder_items if int(f['name']) < 0], key=lambda x: int(x['name']), reverse=True)
-            location_frame = pd.DataFrame(columns=['date', 'speed', code])
+            location_frame = pd.DataFrame()
 
             for items in [pos_speed_folder_items] + [neg_speed_folder_items]:
                 for speed_folder_item in items:
@@ -271,14 +271,32 @@ if __name__ == '__main__':
                     dates = [file_name_integrity(code, f) for f in files]
                     urls = [FILE_URL_TEMPLATE.substitute(fid=f['id']) for f in files]
                     print(f'        {code} {speed_name} {len(files)}')
-                    speed_frame = pd.DataFrame({'date': dates, 'speed': int(speed_name), code: urls})
-                    speed_frame.date = pd.to_datetime(speed_frame.date)
-                    speed_frame.sort_values(by=['date'], inplace=True)
-                    speed_frame.date = speed_frame.date.dt.strftime("%-m/%-d/%Y")  # glide format
-                    location_frame = pd.concat([location_frame, speed_frame])
-            output_frame['date'] = location_frame['date']
-            output_frame['speed'] = location_frame['speed']
-            output_frame[code] = location_frame[code]
+                    # speed_frame = pd.DataFrame({'cols': None, 'date': dates, 'speed': int(speed_name), code: urls})
+                    speed_frame = pd.DataFrame({'date': dates, code + ' ' + speed_name: urls})
+                    speed_frame['date'] = speed_frame['date'].apply(lambda d: d.strftime('%-m/%-d/%Y'))
+                    # speed_frame['cols'] = 's-' + speed_frame['speed'].astype('str') + '-' + speed_frame['date'].astype('str')
+                    # speed_frame['cols'] = code + speed_frame.speed.astype('str')
+                    # speed_frame.drop(['speed'], axis=1, inplace=True)
+                    speed_frame.set_index('date', inplace=True)
+                    speed_frame = speed_frame.transpose()
+                    speed_frame.insert(0, 'code-speed', speed_frame.index)
+                    speed_frame['speed'] = int(speed_name)
+                    location_frame = pd.concat([location_frame, speed_frame]).reset_index(drop=True)
+
+            expected_values = pd.Series(range(location_frame.speed.min(), location_frame.speed.max() + 1))
+            missing_values = expected_values[~expected_values.isin(location_frame.speed)].tolist()
+            for value in missing_values:
+                location_frame.loc[len(location_frame)] = {'code-speed': 'EMPTY ' + str(value), 'speed': value}
+
+            location_frame.sort_values(by=['speed'], inplace=True)
+            location_frame.drop('speed', axis=1, inplace=True)
+            # location_frame.set_index('code-speed', inplace=True)
+            # location_frame = location_frame.transpose()
+            output_frame = pd.concat([output_frame, location_frame])
+        output_frame.set_index('code-speed', inplace=True)
+        output_frame = output_frame.transpose()
+        output_frame.insert(0, 'date', output_frame.index)
+        output_frame.reset_index(drop=True, inplace=True)
 
         print_file_exists(write_df(output_frame, Path(BASE_PATH).joinpath(GOOGLE_NAME)))
         file_id = upload_file(service, Path(BASE_PATH).joinpath(GOOGLE_NAME))
