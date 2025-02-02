@@ -274,29 +274,26 @@ if __name__ == '__main__':
                     # speed_frame = pd.DataFrame({'cols': None, 'date': dates, 'speed': int(speed_name), code: urls})
                     speed_frame = pd.DataFrame({'date': dates, code + ' ' + speed_name: urls})
                     speed_frame['date'] = speed_frame['date'].apply(lambda d: d.strftime('%-m/%-d/%Y'))
-                    # speed_frame['cols'] = 's-' + speed_frame['speed'].astype('str') + '-' + speed_frame['date'].astype('str')
-                    # speed_frame['cols'] = code + speed_frame.speed.astype('str')
-                    # speed_frame.drop(['speed'], axis=1, inplace=True)
                     speed_frame.set_index('date', inplace=True)
                     speed_frame = speed_frame.transpose()
                     speed_frame.insert(0, 'code-speed', speed_frame.index)
                     speed_frame['speed'] = int(speed_name)
                     location_frame = pd.concat([location_frame, speed_frame]).reset_index(drop=True)
 
-            expected_values = pd.Series(range(location_frame.speed.min(), location_frame.speed.max() + 1))
-            missing_values = expected_values[~expected_values.isin(location_frame.speed)].tolist()
-            for value in missing_values:
-                location_frame.loc[len(location_frame)] = {'code-speed': 'EMPTY ' + str(value), 'speed': value}
+            # expected_values = pd.Series(range(location_frame.speed.min(), location_frame.speed.max() + 1))
+            # missing_values = expected_values[~expected_values.isin(location_frame.speed)].tolist()
+            # for value in missing_values:
+            #     location_frame.loc[len(location_frame)] = {'code-speed': code + ' ' + str(value), 'speed': value}
 
-            location_frame.sort_values(by=['speed'], inplace=True)
-            location_frame.drop('speed', axis=1, inplace=True)
-            # location_frame.set_index('code-speed', inplace=True)
-            # location_frame = location_frame.transpose()
+            location_frame = location_frame.sort_values(by=['speed']).drop('speed', axis=1)
             output_frame = pd.concat([output_frame, location_frame])
+
         output_frame.set_index('code-speed', inplace=True)
         output_frame = output_frame.transpose()
+        output_frame.insert(0, 'NULL', {k: 0 for k in range(len(output_frame))})
         output_frame.insert(0, 'date', output_frame.index)
         output_frame.reset_index(drop=True, inplace=True)
+
 
         print_file_exists(write_df(output_frame, Path(BASE_PATH).joinpath(GOOGLE_NAME)))
         file_id = upload_file(service, Path(BASE_PATH).joinpath(GOOGLE_NAME))
