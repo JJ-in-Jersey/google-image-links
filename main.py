@@ -278,7 +278,7 @@ if __name__ == '__main__':
                     speed_frame = speed_frame.transpose()
                     speed_frame.insert(0, 'code-speed', speed_frame.index)
                     speed_frame['speed'] = int(speed_name)
-                    location_frame = pd.concat([location_frame, speed_frame]).reset_index(drop=True)
+                    location_frame = pd.concat([location_frame, speed_frame])
 
             # expected_values = pd.Series(range(location_frame.speed.min(), location_frame.speed.max() + 1))
             # missing_values = expected_values[~expected_values.isin(location_frame.speed)].tolist()
@@ -290,7 +290,6 @@ if __name__ == '__main__':
 
         output_frame.set_index('code-speed', inplace=True)
         output_frame = output_frame.transpose()
-        output_frame.insert(0, 'NULL', {k: 0 for k in range(len(output_frame))})
         output_frame.insert(0, 'date', output_frame.index)
         output_frame.reset_index(drop=True, inplace=True)
 
