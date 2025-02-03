@@ -158,12 +158,12 @@ def add_parent_info(child_item: dict, parent_item: dict = None):
 
 
 def get_tree(item: dict):
-    list = [item['name']]
+    lst = [item['name']]
     while item['parent_item']:
-        list.append(item['parent_item']['name'])
+        lst.append(item['parent_item']['name'])
         item = item['parent_item']
-    list.reverse()
-    return ' > '.join(map(str, list))
+    lst.reverse()
+    return ' > '.join(map(str, lst))
 
 
 def folder_lookup(svc, folder_item: dict = None):
@@ -273,7 +273,7 @@ if __name__ == '__main__':
                     print(f'        {code} {speed_name} {len(files)}')
                     # speed_frame = pd.DataFrame({'cols': None, 'date': dates, 'speed': int(speed_name), code: urls})
                     speed_frame = pd.DataFrame({'date': dates, code + ' ' + speed_name: urls})
-                    speed_frame['date'] = speed_frame['date'].apply(lambda d: d.strftime('%-m/%-d/%Y'))
+                    speed_frame['date'] = speed_frame['date'].apply(lambda d: d.strftime('%m/%d/%Y'))
                     speed_frame.set_index('date', inplace=True)
                     speed_frame = speed_frame.transpose()
                     speed_frame.insert(0, 'code-speed', speed_frame.index)
