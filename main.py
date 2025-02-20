@@ -225,7 +225,7 @@ def file_name_integrity(loc_code: str, g_dict: dict):
     field_names = ['location', 'direction', 'speed', 'year', 'month', 'day', 'ext']
     try:
         file_fields = {field_names[i]: f for i, f in enumerate(g_dict['name'].split())}
-        if (len(file_fields) == len(field_names) and file_fields['location'].upper() == loc_code.upper()
+        if (len(file_fields) == len(field_names) and file_fields['location'].upper() == file_fields['location'].split('-')[0].upper()
                 and file_fields['direction'] in directions and g_dict['mimeType'] == 'image/png'):
             file_date = dt(year=int(file_fields['year']) + 2000, month=int(file_fields['month']), day=int(file_fields['day']))
         else:
@@ -254,20 +254,20 @@ if __name__ == '__main__':
             else:
                 print(f'"{old_file_name}" not found.')
 
-        location_folder_items = sorted([f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder'], key=lambda x: x['name'].upper())
+        location_folders = sorted([f for f in get_file_info(service, IMAGE_FOLDER_CODE) if f['mimeType'] == 'application/vnd.google-apps.folder'], key=lambda x: x['name'].upper())
         output_frame = pd.DataFrame()
-        for location_folder_item in location_folder_items:
-            code = location_folder_item['name'].upper()
+        for location_folder in location_folders:
+            code = location_folder['name'].upper()
             print(f'{code}')
-            speed_folder_items = [f for f in get_file_info(service, location_folder_item['id']) if f['mimeType'] == 'application/vnd.google-apps.folder']
-            pos_speed_folder_items = sorted([f for f in speed_folder_items if int(f['name']) > 0], key=lambda x: int(x['name']))
-            neg_speed_folder_items = sorted([f for f in speed_folder_items if int(f['name']) < 0], key=lambda x: int(x['name']), reverse=True)
+            speed_folders = [f for f in get_file_info(service, location_folder['id']) if f['mimeType'] == 'application/vnd.google-apps.folder']
+            pos_folders = sorted([f for f in speed_folders if int(f['name']) > 0], key=lambda x: int(x['name']))
+            neg_folders = sorted([f for f in speed_folders if int(f['name']) < 0], key=lambda x: int(x['name']), reverse=True)
             location_frame = pd.DataFrame()
 
-            for items in [pos_speed_folder_items] + [neg_speed_folder_items]:
-                for speed_folder_item in items:
-                    speed_name = speed_folder_item['name']
-                    files = get_file_info(service, speed_folder_item['id'])
+            for folder in [pos_folders] + [neg_folders]:
+                for file in folder:
+                    speed_name = file['name']
+                    files = get_file_info(service, file['id'])
                     dates = [file_name_integrity(code, f) for f in files]
                     urls = [FILE_URL_TEMPLATE.substitute(fid=f['id']) for f in files]
                     print(f'        {code} {speed_name} {len(files)}')
