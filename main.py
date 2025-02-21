@@ -225,6 +225,10 @@ def file_name_integrity(loc_code: str, g_dict: dict):
     field_names = ['location', 'direction', 'speed', 'year', 'month', 'day', 'ext']
     try:
         file_fields = {field_names[i]: f for i, f in enumerate(g_dict['name'].split())}
+        day_values = file_fields['day'].split('.')
+        if len(day_values) > 1:
+            file_fields['day'] = day_values[0]
+            file_fields['ext'] = "." + day_values[1]
         if (len(file_fields) == len(field_names) and file_fields['location'].upper() == file_fields['location'].split('-')[0].upper()
                 and file_fields['direction'] in directions and g_dict['mimeType'] == 'image/png'):
             file_date = dt(year=int(file_fields['year']) + 2000, month=int(file_fields['month']), day=int(file_fields['day']))
